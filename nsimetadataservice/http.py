@@ -61,7 +61,7 @@ class HttpHandler(cyclone.web.RequestHandler):
     @defer.inlineCallbacks
     @cyclone.web.asynchronous
     def post(self):
-        request_as_json = self._load_request_as_json
+        request_as_json = self._load_request_as_json()
         doc = request_as_json['doc']
         key = self.sam.put(value={'doc':doc}).resource().key
         response = cyclone.web.escape.json_encode({'doc_key':key})
