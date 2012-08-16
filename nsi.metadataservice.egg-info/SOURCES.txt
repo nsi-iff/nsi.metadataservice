@@ -1,0 +1,15 @@
+setup.py
+nsi.metadataservice.egg-info/PKG-INFO
+nsi.metadataservice.egg-info/SOURCES.txt
+nsi.metadataservice.egg-info/dependency_links.txt
+nsi.metadataservice.egg-info/entry_points.txt
+nsi.metadataservice.egg-info/requires.txt
+nsi.metadataservice.egg-info/top_level.txt
+nsi.metadataservice.egg-info/zip-safe
+nsimetadataservice/__init__.py
+nsimetadataservice/auth.py
+nsimetadataservice/http.py
+nsimetadataservice/tasks.py
+nsimetadataservice/interfaces/__init__.py
+nsimetadataservice/interfaces/auth.py
+nsimetadataservice/interfaces/http.py
