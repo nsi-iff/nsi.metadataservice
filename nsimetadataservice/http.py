@@ -55,7 +55,16 @@ class HttpHandler(cyclone.web.RequestHandler):
     @defer.inlineCallbacks
     @cyclone.web.asynchronous
     def get(self):
-        pass
+        key = self._load_request_as_json()['key']
+        response = self.sam.get(key=key).resource()
+        if hasattr(response.data, 'metadata_key'):
+            response = cyclone.web.escape.json_encode({'done':True})
+            self.set_header('Content-Type', 'application/json')
+            self.finish(response)
+        else:
+            response = cyclone.web.escape.json_encode({'done':False})
+            self.set_header('Content-Type', 'application/json')
+            self.finish(response)
 
     @auth
     @defer.inlineCallbacks
