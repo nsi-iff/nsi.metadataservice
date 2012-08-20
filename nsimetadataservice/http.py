@@ -45,6 +45,10 @@ class HttpHandler(cyclone.web.RequestHandler):
     def _load_sam_config(self):
         self.sam_settings = {'url': self.settings.sam_url, 'auth': [self.settings.sam_user, self.settings.sam_pass]}
 
+    def _enqueue_document(self, key, filename, sam_settings):
+        send_task('nsimetadataservice.tasks.ExtractMetadata', args=(key, filename,
+                   self.sam_settings), queue=self._task_queue, routing_key=self._task_queue)
+
     def __init__(self, *args, **kwargs):
         cyclone.web.RequestHandler.__init__(self, *args, **kwargs)
         self._load_sam_config()
@@ -72,7 +76,9 @@ class HttpHandler(cyclone.web.RequestHandler):
     def post(self):
         request_as_json = self._load_request_as_json()
         doc = request_as_json['doc']
+        filename = request_as_json['filename']
         key = self.sam.put(value={'doc':doc}).resource().key
         response = cyclone.web.escape.json_encode({'doc_key':key})
         self.set_header('Content-Type', 'application/json')
+        self._enqueue_document(key, filename, self.sam_settings)
         self.finish(response)
