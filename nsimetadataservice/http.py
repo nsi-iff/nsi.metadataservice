@@ -47,7 +47,7 @@ class HttpHandler(cyclone.web.RequestHandler):
 
     def _enqueue_document(self, key, filename, sam_settings):
         send_task('nsimetadataservice.tasks.ExtractMetadata', args=(key, filename,
-                   self.sam_settings), queue=self._task_queue, routing_key=self._task_queue)
+                   sam_settings), queue=self._task_queue, routing_key=self._task_queue)
 
     def __init__(self, *args, **kwargs):
         cyclone.web.RequestHandler.__init__(self, *args, **kwargs)
@@ -59,16 +59,38 @@ class HttpHandler(cyclone.web.RequestHandler):
     @defer.inlineCallbacks
     @cyclone.web.asynchronous
     def get(self):
-        key = self._load_request_as_json()['key']
+        key = self._load_request_as_json().get('key')
+        is_metadata_request = self._load_request_as_json().get('metadata')
         response = self.sam.get(key=key).resource()
+
         if hasattr(response.data, 'metadata_key'):
-            response = cyclone.web.escape.json_encode({'done':True})
+            if is_metadata_request:
+                response = cyclone.web.escape.json_encode({'metadata_key':response.data.metadata_key})
+            elif response.data.metadata_key:
+                response = cyclone.web.escape.json_encode({'done':True})
+            elif not response.data.metadata_key:
+                response = cyclone.web.escape.json_encode({'done':False})
             self.set_header('Content-Type', 'application/json')
             self.finish(response)
-        else:
-            response = cyclone.web.escape.json_encode({'done':False})
-            self.set_header('Content-Type', 'application/json')
-            self.finish(response)
+
+#    def get(self):
+#        key = self._load_request_as_json()['key']
+#        response = self.sam.get(key=key).resource()
+#        try:
+#            metadata_boolean = self._load_request_as_json()['metadata']
+#            if metadata_boolean == True:
+#                response = cyclone.web.escape.json_encode({'metadata_key':'gamba'})
+#                self.set_header('Content-Type', 'application/json')
+#                self.finish(response)
+#        except:
+#            if hasattr(response.data, 'metadata_key'):
+#                response = cyclone.web.escape.json_encode({'done':True})
+#                self.set_header('Content-Type', 'application/json')
+#                self.finish(response)
+#            else:
+#                response = cyclone.web.escape.json_encode({'done':False})
+#                self.set_header('Content-Type', 'application/json')
+#                self.finish(response)
 
     @auth
     @defer.inlineCallbacks
@@ -77,6 +99,7 @@ class HttpHandler(cyclone.web.RequestHandler):
         request_as_json = self._load_request_as_json()
         doc = request_as_json['doc']
         filename = request_as_json['filename']
+#        callback = request_as_json['callback']
         key = self.sam.put(value={'doc':doc}).resource().key
         response = cyclone.web.escape.json_encode({'doc_key':key})
         self.set_header('Content-Type', 'application/json')
