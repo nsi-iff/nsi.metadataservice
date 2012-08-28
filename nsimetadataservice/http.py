@@ -105,17 +105,24 @@ class HttpHandler(cyclone.web.RequestHandler):
     @cyclone.web.asynchronous
     def post(self):
         request_as_json = yield self._load_request_as_json()
-        doc = request_as_json.get('doc')
+        file = request_as_json.get('file')
+        doc_key = request_as_json.get('doc_key')
         filename = request_as_json.get('filename')
-        if not doc or not filename:
+        if file and filename:
+            response = self.sam.put(value={'file':file})
+            self._verify_errors(response)
+            log.msg('Request to SAM processed successfully')
+            key = response.resource().key
+            response = cyclone.web.escape.json_encode({'doc_key':key})
+            self.set_header('Content-Type', 'application/json')
+            self._enqueue_document(key, filename, self.sam_settings)
+            self.finish(response)
+        elif doc_key and filename:
+            response = cyclone.web.escape.json_encode({'doc_key':doc_key})
+            self.set_header('Content-Type', 'application/json')
+            self._enqueue_document(doc_key, filename, self.sam_settings)
+            self.finish(response)
+        else:
             log.msg("POST failed!")
-            log.msg("Filename and document unknown.")
+            log.msg("File or filename or doc_key unknown.")
             raise cyclone.web.HTTPError(400, 'Malformed request.')
-        response = self.sam.put(value={'doc':doc})
-        self._verify_errors(response)
-        log.msg('Request to SAM processed successfully')
-        key = response.resource().key
-        response = cyclone.web.escape.json_encode({'doc_key':key})
-        self.set_header('Content-Type', 'application/json')
-        self._enqueue_document(key, filename, self.sam_settings)
-        self.finish(response)

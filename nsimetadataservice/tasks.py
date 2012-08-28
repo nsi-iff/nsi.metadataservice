@@ -13,7 +13,7 @@ class ExtractMetadata(Task):
         old_dict = loads(temp_response.body)
         resource = temp_response.resource()
         tmp_doc_path = '/tmp/%s.%s' % (key, filename)
-        open(tmp_doc_path, 'w+').write(decodestring(resource.data.doc))
+        open(tmp_doc_path, 'w+').write(decodestring(resource.data.file))
         metadata = self.find_metadata(tmp_doc_path)
         metadata_key = self.sam.put(value=metadata).resource().key
         metadata_dict = {'metadata_key': metadata_key}
