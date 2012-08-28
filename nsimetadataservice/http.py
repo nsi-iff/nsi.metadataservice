@@ -34,6 +34,24 @@ class HttpHandler(cyclone.web.RequestHandler):
     implements(IHttp)
     no_keep_alive = True
 
+    def _verify_errors(self, response, key=None):
+        if response.code == '500':
+            log.msg("GET failed!")
+            log.msg("There is an unexpected exception.")
+            raise cyclone.web.HTTPError(500, 'Unexpected exception.')
+        if response.code == "400":
+            log.msg("GET failed!")
+            log.msg("Request didn't have a key to find.")
+            raise cyclone.web.HTTPError(400, 'Malformed request.')
+        if response.code == "401":
+            log.msg("GET failed!")
+            log.msg("METADATASERVICE user and password not match.")
+            raise cyclone.web.HTTPError(401, 'METADATASERVICE user and password not match.')
+        if response.code == "404":
+            log.msg("GET failed!")
+            log.msg("Couldn't find any value for the key: %s" % key)
+            raise cyclone.web.HTTPError(404, 'Unknown key.')
+
     def _get_current_user(self):
         auth = self.request.headers.get("Authorization")
         if auth:
@@ -60,27 +78,43 @@ class HttpHandler(cyclone.web.RequestHandler):
     @cyclone.web.asynchronous
     def get(self):
         key = self._load_request_as_json().get('key')
+        if not key:
+            log.msg("GET failed!")
+            log.msg("Request didn't have a key to find.")
+            raise cyclone.web.HTTPError(400, 'Malformed request.')
         is_metadata_request = self._load_request_as_json().get('metadata')
-        response = yield self.sam.get(key=key).resource()
-
+        response = yield self.sam.get(key=key)
+        self._verify_errors(response, key)
+        log.msg("Request to SAM processed successfully")
+        response = response.resource()
         if hasattr(response.data, 'metadata_key'):
             if is_metadata_request:
+                log.msg("The metadata documents are stored and a metadata_key attribute was created.")
                 response = cyclone.web.escape.json_encode({'metadata_key':response.data.metadata_key})
-            elif response.data.metadata_key:
+            else:
+                log.msg("Data extraction was completed successfully.")
                 response = cyclone.web.escape.json_encode({'done':True})
-            elif not response.data.metadata_key:
-                response = cyclone.web.escape.json_encode({'done':False})
-            self.set_header('Content-Type', 'application/json')
-            self.finish(response)
+        else:
+            log.msg("Object 'response.data' didn't have 'metadata_key' attribute.")
+            response = cyclone.web.escape.json_encode({'done':False})
+        self.set_header('Content-Type', 'application/json')
+        self.finish(response)
 
     @auth
     @defer.inlineCallbacks
     @cyclone.web.asynchronous
     def post(self):
         request_as_json = yield self._load_request_as_json()
-        doc = request_as_json['doc']
-        filename = request_as_json['filename']
-        key = self.sam.put(value={'doc':doc}).resource().key
+        doc = request_as_json.get('doc')
+        filename = request_as_json.get('filename')
+        if not doc or not filename:
+            log.msg("POST failed!")
+            log.msg("Filename and document unknown.")
+            raise cyclone.web.HTTPError(400, 'Malformed request.')
+        response = self.sam.put(value={'doc':doc})
+        self._verify_errors(response)
+        log.msg('Request to SAM processed successfully')
+        key = response.resource().key
         response = cyclone.web.escape.json_encode({'doc_key':key})
         self.set_header('Content-Type', 'application/json')
         self._enqueue_document(key, filename, self.sam_settings)
