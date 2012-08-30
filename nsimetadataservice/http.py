@@ -63,9 +63,9 @@ class HttpHandler(cyclone.web.RequestHandler):
     def _load_sam_config(self):
         self.sam_settings = {'url': self.settings.sam_url, 'auth': [self.settings.sam_user, self.settings.sam_pass]}
 
-    def _enqueue_document(self, key, filename, sam_settings):
-        send_task('nsimetadataservice.tasks.ExtractMetadata', args=(key, filename,
-                   sam_settings), queue=self._task_queue, routing_key=self._task_queue)
+    def _enqueue_document(self, doc_key, filename, sam_settings, callback_url, callback_verb):
+        send_task('nsimetadataservice.tasks.ExtractMetadata', args=(doc_key, filename,
+                   sam_settings, callback_url, callback_verb, self._task_queue, self._task_queue), queue=self._task_queue, routing_key=self._task_queue)
 
     def __init__(self, *args, **kwargs):
         cyclone.web.RequestHandler.__init__(self, *args, **kwargs)
@@ -105,6 +105,8 @@ class HttpHandler(cyclone.web.RequestHandler):
     @cyclone.web.asynchronous
     def post(self):
         request_as_json = yield self._load_request_as_json()
+        callback_url = request_as_json.get('callback_url') or None
+        callback_verb = request_as_json.get('verb') or 'POST'
         file = request_as_json.get('file')
         doc_key = request_as_json.get('doc_key')
         filename = request_as_json.get('filename')
@@ -112,15 +114,17 @@ class HttpHandler(cyclone.web.RequestHandler):
             response = self.sam.put(value={'file':file})
             self._verify_errors(response)
             log.msg('Request to SAM processed successfully')
-            key = response.resource().key
-            response = cyclone.web.escape.json_encode({'doc_key':key})
+            doc_key = response.resource().key
+            response = cyclone.web.escape.json_encode({'doc_key':doc_key})
+            self._enqueue_document(doc_key, filename, self.sam_settings, callback_url, callback_verb)
             self.set_header('Content-Type', 'application/json')
-            self._enqueue_document(key, filename, self.sam_settings)
+            log.msg('Document sent to the data extraction queue.')
             self.finish(response)
         elif doc_key and filename:
             response = cyclone.web.escape.json_encode({'doc_key':doc_key})
+            self._enqueue_document(doc_key, filename, self.sam_settings, callback_url, callback_verb)
             self.set_header('Content-Type', 'application/json')
-            self._enqueue_document(doc_key, filename, self.sam_settings)
+            log.msg('Document sent to the data extraction queue.')
             self.finish(response)
         else:
             log.msg("POST failed!")
